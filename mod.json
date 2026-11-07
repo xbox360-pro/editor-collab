@@ -1,0 +1,43 @@
+{
+	"geode": "5.11.2",
+	"gd": {
+		"win": "2.2081",
+		"android": "2.2081",
+		"mac": "2.2081",
+		"ios": "2.2081"
+	},
+	"id": "leon.editor-collab",
+	"name": "Editor Collab",
+	"version": "v1.1.0",
+	"developer": "Leon",
+	"description": "Build levels together in real time with your friends.",
+	"tags": ["editor", "online", "enhancement"],
+	"settings": {
+		"server-url": {
+			"type": "string",
+			"name": "Server URL",
+			"description": "Where the Editor Collab server is. Only the host needs this - joining with an invite fills it in automatically. You can also change it in the Collab popup.",
+			"default": "127.0.0.1:8484"
+		},
+		"display-name": {
+			"type": "string",
+			"name": "Display Name",
+			"description": "Name other people see. Leave empty to use your GD account name.",
+			"default": ""
+		},
+		"sync-interval": {
+			"type": "float",
+			"name": "Sync Interval (seconds)",
+			"description": "How often changes are sent and received. Lower is snappier, higher is lighter on big levels.",
+			"default": 0.3,
+			"min": 0.1,
+			"max": 2.0
+		},
+		"show-peers": {
+			"type": "bool",
+			"name": "Show Other Players",
+			"description": "Show a marker where each collaborator's camera is.",
+			"default": true
+		}
+	}
+}
