@@ -38,9 +38,9 @@ namespace {
         return code.size() == 6 && (text.size() <= 8 || !server.empty());
     }
 
-    void doJoin(std::string code) {
+    void doJoin(std::string code, std::string server) {
         auto spinner = loading("Joining room...");
-        CollabSession::get()->join(code, [spinner, code](std::string const& err) {
+        CollabSession::get()->join(code, server, [spinner, code](std::string const& err) {
             spinner->hide();
             if (!err.empty()) {
                 FLAlertLayer::create("Collab", ("Couldn't join:\n<cr>" + err + "</c>").c_str(), "OK")->show();
@@ -84,53 +84,46 @@ void CollabPopup::buildDisconnected() {
         Anchor::Top, ccp(0, -40)
     );
 
-    // --- Join (top, since most people will be joining) ---
-    m_mainLayer->addChildAtPosition(smallLabel("Got an invite? Paste it here:", .7f), Anchor::Center, ccp(0, 72));
+    // --- Join ---
+    m_mainLayer->addChildAtPosition(smallLabel("Join a friend's room:", .75f), Anchor::Center, ccp(0, 72));
 
-    m_inviteInput = TextInput::create(200.f, "ABC123@address");
+    m_inviteInput = TextInput::create(170.f, "Room code");
     m_inviteInput->setCommonFilter(CommonFilter::Any);
     m_inviteInput->setMaxCharCount(120);
-    m_mainLayer->addChildAtPosition(m_inviteInput, Anchor::Center, ccp(-38, 46));
+    m_mainLayer->addChildAtPosition(m_inviteInput, Anchor::Center, ccp(-45, 44));
 
     auto joinMenu = menuAt();
     auto pasteBtn = makeIcon("GJ_pasteBtn_001.png", .55f, this, menu_selector(CollabPopup::onPaste));
-    pasteBtn->setPosition(ccp(80, 0));
+    pasteBtn->setPosition(ccp(65, 0));
     auto joinBtn = makeButton("Join", "GJ_button_02.png", this, menu_selector(CollabPopup::onJoin), .7f);
-    joinBtn->setPosition(ccp(124, 0));
+    joinBtn->setPosition(ccp(112, 0));
     joinMenu->addChild(pasteBtn);
     joinMenu->addChild(joinBtn);
-    m_mainLayer->addChildAtPosition(joinMenu, Anchor::Center, ccp(-38, 46));
+    m_mainLayer->addChildAtPosition(joinMenu, Anchor::Center, ccp(-45, 44));
 
-    // fill it in automatically if there's an invite on the clipboard
+    // fill it in automatically if there's a code on the clipboard
     auto clip = clipboard::read();
     if (looksLikeInvite(clip)) m_inviteInput->setString(clip);
 
     // --- Host ---
-    m_mainLayer->addChildAtPosition(smallLabel("- or -", .7f, 140), Anchor::Center, ccp(0, 16));
+    m_mainLayer->addChildAtPosition(smallLabel("- or -", .7f, 140), Anchor::Center, ccp(0, 12));
 
     auto hostMenu = menuAt();
     auto hostBtn = makeButton("Host a Room", "GJ_button_01.png", this, menu_selector(CollabPopup::onHost));
     hostMenu->addChild(hostBtn);
-    m_mainLayer->addChildAtPosition(hostMenu, Anchor::Center, ccp(0, -12));
+    m_mainLayer->addChildAtPosition(hostMenu, Anchor::Center, ccp(0, -18));
 
-    // --- Server (only matters for the host) ---
-    m_mainLayer->addChildAtPosition(
-        smallLabel("Server (only the host needs to set this)", .55f, 150), Anchor::Bottom, ccp(0, 58)
-    );
-
-    m_serverInput = TextInput::create(190.f, "127.0.0.1:8484");
-    m_serverInput->setCommonFilter(CommonFilter::Any);
-    m_serverInput->setMaxCharCount(120);
-    m_serverInput->setString(Mod::get()->getSettingValue<std::string>("server-url"));
-    m_serverInput->setCallback([](std::string const& text) {
-        CollabSession::setServerUrl(text);
-    });
-    m_serverInput->setScale(.85f);
-    m_mainLayer->addChildAtPosition(m_serverInput, Anchor::Bottom, ccp(-28, 34));
+    // --- Server status line ---
+    auto serverText = CollabSession::usingCustomServer()
+        ? fmt::format("Server: {} (custom)", CollabSession::serverUrl())
+        : std::string("Server: Global");
+    auto serverLabel = smallLabel(serverText, .55f, 150);
+    serverLabel->limitLabelWidth(220.f, .55f, .3f);
+    m_mainLayer->addChildAtPosition(serverLabel, Anchor::Bottom, ccp(-30, 26));
 
     auto testMenu = menuAt();
-    testMenu->addChild(makeButton("Test", "GJ_button_04.png", this, menu_selector(CollabPopup::onTest), .6f));
-    m_mainLayer->addChildAtPosition(testMenu, Anchor::Bottom, ccp(110, 34));
+    testMenu->addChild(makeButton("Test", "GJ_button_04.png", this, menu_selector(CollabPopup::onTest), .5f));
+    m_mainLayer->addChildAtPosition(testMenu, Anchor::Bottom, ccp(110, 26));
 
     if (session->isBusy()) {
         hostBtn->setEnabled(false);
@@ -144,16 +137,16 @@ void CollabPopup::buildConnected() {
     auto session = CollabSession::get();
 
     m_mainLayer->addChildAtPosition(
-        smallLabel("Send this invite to your friends:", .7f, 190), Anchor::Top, ccp(0, -48)
+        smallLabel("Send this code to your friends:", .7f, 190), Anchor::Top, ccp(0, -48)
     );
 
     auto invite = CCLabelBMFont::create(session->inviteCode().c_str(), "bigFont.fnt");
     invite->setColor({120, 255, 140});
-    invite->limitLabelWidth(290.f, .6f, .25f);
+    invite->limitLabelWidth(290.f, 1.f, .25f);
     m_mainLayer->addChildAtPosition(invite, Anchor::Top, ccp(0, -72));
 
     auto copyMenu = menuAt();
-    copyMenu->addChild(makeButton("Copy Invite", "GJ_button_01.png", this, menu_selector(CollabPopup::onCopy), .7f));
+    copyMenu->addChild(makeButton("Copy Code", "GJ_button_01.png", this, menu_selector(CollabPopup::onCopy), .7f));
     m_mainLayer->addChildAtPosition(copyMenu, Anchor::Top, ccp(0, -102));
 
     std::string who;
@@ -186,13 +179,8 @@ void CollabPopup::buildConnected() {
 
 // --------------------------------------------------------------- actions
 
-void CollabPopup::saveServer() {
-    if (m_serverInput) CollabSession::setServerUrl(m_serverInput->getString());
-}
-
 void CollabPopup::onTest(CCObject*) {
-    this->saveServer();
-    auto spinner = loading("Checking server...");
+    auto spinner = loading("Checking server (can take a minute if it was asleep)...");
     CollabSession::get()->ping([spinner](std::string const& err) {
         spinner->hide();
         if (err.empty()) {
@@ -205,7 +193,6 @@ void CollabPopup::onTest(CCObject*) {
 }
 
 void CollabPopup::onHost(CCObject*) {
-    this->saveServer();
     auto spinner = loading("Creating room...");
     this->onClose(nullptr);
 
@@ -214,34 +201,33 @@ void CollabPopup::onHost(CCObject*) {
         if (!err.empty()) {
             FLAlertLayer::create(
                 "Collab",
-                ("Couldn't create a room:\n<cr>" + err + "</c>\n\n"
-                 "Make sure the server is running (double-click <cy>Start Server</c>).").c_str(),
+                ("Couldn't create a room:\n<cr>" + err + "</c>").c_str(),
                 "OK"
             )->show();
             return;
         }
         clipboard::write(CollabSession::get()->inviteCode());
-        Notification::create("Room created - invite copied! Send it to your friends", NotificationIcon::Success, 3.f)->show();
+        Notification::create(
+            fmt::format("Room {} created - code copied! Send it to your friends", CollabSession::get()->inviteCode()),
+            NotificationIcon::Success, 3.f
+        )->show();
     });
 }
 
 void CollabPopup::onJoin(CCObject*) {
-    this->saveServer();
     auto text = m_inviteInput ? std::string(m_inviteInput->getString()) : "";
     auto [code, server] = CollabSession::parseInvite(text);
     if (code.empty()) {
-        Notification::create("Paste the invite your friend sent you first", NotificationIcon::Warning)->show();
+        Notification::create("Type the room code your friend sent you first", NotificationIcon::Warning)->show();
         return;
     }
-    // invites carry the server address, so the joiner never touches settings
-    if (!server.empty()) CollabSession::setServerUrl(server);
 
     this->onClose(nullptr);
 
     auto layer = LevelEditorLayer::get();
     bool empty = !layer || !layer->m_objects || layer->m_objects->count() == 0;
     if (empty) {
-        doJoin(code);
+        doJoin(code, server);
         return;
     }
 
@@ -250,8 +236,8 @@ void CollabPopup::onJoin(CCObject*) {
         "This level isn't empty. Joining <cy>replaces it</c> with the room's level.\n"
         "Tip: join from a <cg>new empty level</c>. Continue?",
         "Cancel", "Join",
-        [code](FLAlertLayer*, bool yes) {
-            if (yes) doJoin(code);
+        [code, server](FLAlertLayer*, bool yes) {
+            if (yes) doJoin(code, server);
         }
     );
 }
@@ -264,7 +250,7 @@ void CollabPopup::onLeave(CCObject*) {
 
 void CollabPopup::onCopy(CCObject*) {
     clipboard::write(CollabSession::get()->inviteCode());
-    Notification::create("Invite copied", NotificationIcon::Success)->show();
+    Notification::create("Code copied", NotificationIcon::Success)->show();
 }
 
 void CollabPopup::onPaste(CCObject*) {

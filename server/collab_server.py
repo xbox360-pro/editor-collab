@@ -13,6 +13,7 @@ Rooms live in memory; a room is deleted after it has been empty for a while.
 
 import argparse
 import json
+import os
 import random
 import string
 import threading
@@ -243,7 +244,7 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     ap = argparse.ArgumentParser(description="Editor Collab relay server")
     ap.add_argument("--host", default="0.0.0.0")
-    ap.add_argument("--port", type=int, default=8484)
+    ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8484)))
     args = ap.parse_args()
 
     global LAN_ADDRESS

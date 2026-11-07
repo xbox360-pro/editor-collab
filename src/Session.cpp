@@ -21,19 +21,29 @@ namespace {
 
 }
 
-std::string CollabSession::serverUrl() {
-    auto url = Mod::get()->getSettingValue<std::string>("server-url");
-    while (!url.empty() && (url.back() == '/' || url.back() == ' ')) url.pop_back();
-    while (!url.empty() && url.front() == ' ') url.erase(url.begin());
-    if (url.empty()) url = "127.0.0.1:8484";
-    if (url.rfind("http://", 0) != 0 && url.rfind("https://", 0) != 0) {
-        url = "http://" + url;
+namespace {
+    std::string normalizeUrl(std::string url) {
+        while (!url.empty() && (url.back() == '/' || std::isspace(static_cast<unsigned char>(url.back())))) url.pop_back();
+        while (!url.empty() && std::isspace(static_cast<unsigned char>(url.front()))) url.erase(url.begin());
+        if (url.empty()) return "";
+        if (url.rfind("http://", 0) != 0 && url.rfind("https://", 0) != 0) {
+            url = "http://" + url;
+        }
+        return url;
     }
-    return url;
 }
 
-void CollabSession::setServerUrl(std::string const& url) {
-    Mod::get()->setSettingValue<std::string>("server-url", url);
+bool CollabSession::usingCustomServer() {
+    return Mod::get()->getSettingValue<bool>("use-custom-server")
+        && !normalizeUrl(Mod::get()->getSettingValue<std::string>("server-url")).empty();
+}
+
+// The server new rooms are hosted on: the global one, unless the player set their own
+std::string CollabSession::serverUrl() {
+    if (usingCustomServer()) {
+        return normalizeUrl(Mod::get()->getSettingValue<std::string>("server-url"));
+    }
+    return GLOBAL_SERVER;
 }
 
 std::pair<std::string, std::string> CollabSession::parseInvite(std::string const& text) {
@@ -54,8 +64,10 @@ std::pair<std::string, std::string> CollabSession::parseInvite(std::string const
 
 std::string CollabSession::inviteCode() const {
     if (m_room.empty()) return "";
-    auto url = serverUrl();
-    std::string host = url;
+    // rooms on the global server are just the code
+    if (m_server == GLOBAL_SERVER) return m_room;
+
+    std::string host = m_server;
     bool https = host.rfind("https://", 0) == 0;
     if (host.rfind("http://", 0) == 0) host = host.substr(7);
     else if (https) host = host.substr(8);
@@ -69,7 +81,7 @@ std::string CollabSession::inviteCode() const {
 
 void CollabSession::ping(DoneCallback done) {
     (void)async::spawn(
-        web::WebRequest().timeout(std::chrono::seconds(6)).get(serverUrl() + "/health"),
+        web::WebRequest().timeout(std::chrono::seconds(75)).get(serverUrl() + "/health"),
         [done](web::WebResponse res) {
             if (res.ok()) {
                 auto json = res.json();
@@ -125,6 +137,7 @@ void CollabSession::reset() {
     m_room.clear();
     m_client.clear();
     m_lanAddress.clear();
+    m_server.clear();
     m_seq = 0;
     m_counter = 0;
     m_idToObj.clear();
@@ -140,6 +153,7 @@ void CollabSession::host(DoneCallback done) {
     if (!m_layer || m_active || m_busy) return;
     m_busy = true;
     m_lastError.clear();
+    m_server = serverUrl();
 
     this->request("/create", matjson::makeObject({
         {"name", displayName()},
@@ -161,10 +175,12 @@ void CollabSession::host(DoneCallback done) {
     });
 }
 
-void CollabSession::join(std::string code, DoneCallback done) {
+void CollabSession::join(std::string code, std::string server, DoneCallback done) {
     if (!m_layer || m_active || m_busy) return;
     m_busy = true;
     m_lastError.clear();
+    // a bare code means the global server; "CODE@address" means a self-hosted one
+    m_server = server.empty() ? std::string(GLOBAL_SERVER) : normalizeUrl(server);
 
     this->request("/join", matjson::makeObject({
         {"room", code},
@@ -201,7 +217,7 @@ void CollabSession::leave() {
             web::WebRequest()
                 .timeout(std::chrono::seconds(5))
                 .bodyJSON(matjson::makeObject({{"room", m_room}, {"client", m_client}}))
-                .post(serverUrl() + "/leave"),
+                .post(m_server + "/leave"),
             [](web::WebResponse) {}
         );
     }
@@ -212,11 +228,13 @@ void CollabSession::leave() {
 
 void CollabSession::request(std::string const& path, matjson::Value body, JsonCallback cb) {
     int gen = m_generation;
-    auto url = serverUrl() + path;
+    auto url = m_server + path;
+    // the free global server sleeps when nobody uses it and takes up to a minute to wake
+    bool first = path == "/create" || path == "/join";
 
     (void)async::spawn(
         web::WebRequest()
-            .timeout(std::chrono::seconds(20))
+            .timeout(std::chrono::seconds(first ? 75 : 20))
             .bodyJSON(body)
             .post(url),
         [this, gen, cb = std::move(cb)](web::WebResponse res) {
@@ -228,7 +246,7 @@ void CollabSession::request(std::string const& path, matjson::Value body, JsonCa
                 if (parsed.isOk()) msg = str(parsed.unwrap(), "error");
                 if (msg.empty()) {
                     msg = res.code() == 0
-                        ? "Couldn't reach the server. Check the Server URL in the mod settings."
+                        ? "Couldn't reach the server. Check your internet connection and try again."
                         : fmt::format("Server error ({})", res.code());
                 }
                 cb(matjson::Value(), msg);

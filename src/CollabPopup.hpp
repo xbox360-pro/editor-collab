@@ -21,8 +21,5 @@ protected:
     void onPaste(CCObject*);
     void onTest(CCObject*);
 
-    void saveServer();
-
     TextInput* m_inviteInput = nullptr;
-    TextInput* m_serverInput = nullptr;
 };

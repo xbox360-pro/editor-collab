@@ -7,17 +7,15 @@
 	},
 	"id": "leon.editor-collab",
 	"name": "Editor Collab",
-	"version": "v1.1.0",
+	"version": "v1.2.0",
 	"developer": "Leon",
-	"description": "Build levels together in real time with your friends.",
-	"tags": ["editor", "online", "enhancement"],
+	"description": "Build levels together in real time with your friends - no setup, just share a room code.",
+	"tags": [
+		"editor",
+		"online",
+		"enhancement"
+	],
 	"settings": {
-		"server-url": {
-			"type": "string",
-			"name": "Server URL",
-			"description": "Where the Editor Collab server is. Only the host needs this - joining with an invite fills it in automatically. You can also change it in the Collab popup.",
-			"default": "127.0.0.1:8484"
-		},
 		"display-name": {
 			"type": "string",
 			"name": "Display Name",
@@ -37,6 +35,19 @@
 			"name": "Show Other Players",
 			"description": "Show a marker where each collaborator's camera is.",
 			"default": true
+		},
+		"use-custom-server": {
+			"type": "bool",
+			"name": "Use My Own Server",
+			"description": "Host rooms on your own Editor Collab server instead of the global one. Friends join with the invite you copy (CODE@address).",
+			"default": false
+		},
+		"server-url": {
+			"type": "string",
+			"name": "My Server Address",
+			"description": "Address of your own server, e.g. <cy>127.0.0.1:8484</c>.",
+			"default": "127.0.0.1:8484",
+			"enable-if": "use-custom-server"
 		}
 	}
 }

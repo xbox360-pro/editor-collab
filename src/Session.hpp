@@ -8,6 +8,10 @@
 
 using namespace geode::prelude;
 
+// Free public server everyone uses by default (like Globed) - no setup needed.
+// Change this if you deploy the server somewhere else.
+constexpr char const* GLOBAL_SERVER = "https://editor-collab-xbox360pro.onrender.com";
+
 struct CollabPeer {
     std::string id;
     std::string name;
@@ -41,8 +45,9 @@ public:
     // Splits "CODE@server" into {code, server}; server is empty for a bare code
     static std::pair<std::string, std::string> parseInvite(std::string const& text);
 
+    // Where new rooms get hosted (global server unless a custom one is set)
     static std::string serverUrl();
-    static void setServerUrl(std::string const& url);
+    static bool usingCustomServer();
     // Checks the server is reachable
     void ping(DoneCallback done);
 
@@ -51,7 +56,7 @@ public:
     void detach(LevelEditorLayer* layer);
 
     void host(DoneCallback done);
-    void join(std::string code, DoneCallback done);
+    void join(std::string code, std::string server, DoneCallback done);
     void leave();
 
     // Driven every frame by CollabNode
@@ -93,6 +98,7 @@ private:
     std::string m_client;
     std::string m_lastError;
     std::string m_lanAddress;
+    std::string m_server; // server of the current room
     long long m_seq = 0;
     long long m_counter = 0;
 

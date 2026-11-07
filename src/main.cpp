@@ -1,5 +1,6 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/EditorUI.hpp>
+#include <Geode/modify/EditorPauseLayer.hpp>
 
 #include "CollabPopup.hpp"
 #include "Session.hpp"
@@ -199,5 +200,29 @@ class $modify(CollabEditorUI, EditorUI) {
             this->addChild(node, 1000);
         }
         return true;
+    }
+};
+
+// Backup entry point: a Collab button in the editor pause menu too
+class $modify(CollabPauseLayer, EditorPauseLayer) {
+    void customSetup() {
+        EditorPauseLayer::customSetup();
+
+        auto win = CCDirector::get()->getWinSize();
+        auto spr = ButtonSprite::create("Collab", "bigFont.fnt", "GJ_button_04.png", .8f);
+        spr->setScale(.6f);
+        auto btn = CCMenuItemSpriteExtra::create(spr, this, menu_selector(CollabPauseLayer::onCollab));
+        btn->setID("collab-button"_spr);
+
+        auto menu = CCMenu::create();
+        menu->setID("collab-menu"_spr);
+        menu->setContentSize({0, 0});
+        menu->setPosition(ccp(win.width - 45.f, 25.f));
+        menu->addChild(btn);
+        this->addChild(menu, 100);
+    }
+
+    void onCollab(CCObject*) {
+        if (auto popup = CollabPopup::create()) popup->show();
     }
 };

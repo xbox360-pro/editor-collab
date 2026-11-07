@@ -1,0 +1,9 @@
+# One-click deploy of the global Editor Collab server on Render's free plan.
+services:
+  - type: web
+    name: editor-collab-xbox360pro
+    runtime: python
+    plan: free
+    buildCommand: echo "nothing to build"
+    startCommand: python server/collab_server.py --port $PORT
+    healthCheckPath: /health
